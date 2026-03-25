@@ -15,6 +15,8 @@ Claude Desktop에 연결하면 사진과 간단한 정보만으로 SEO 최적화
 | `load_draft` | 초안 ID로 내용 불러오기 |
 | `delete_draft` | 초안 삭제 |
 | `publish_to_naver` | 블로그 글을 클립보드에 복사 (네이버 에디터에 Ctrl+V로 발행) |
+| `analyze_style` | 기존 블로그 글(URL 또는 텍스트)로 개인 스타일 분석 및 학습 |
+| `save_style_profile` | 분석된 스타일 프로필 저장 (analyze_style 후 자동 호출) |
 
 **지원 카테고리**: 맛집 리뷰(`restaurant`) · 여행기(`travel`) · 투자 정보(`investment`)
 
@@ -105,6 +107,23 @@ load_draft 툴로 20260325_153012_restaurant 불러와줘
 delete_draft 툴로 20260325_153012_restaurant 삭제해줘
 ```
 
+### 개인 스타일 학습 (최초 1회)
+
+기존에 작성한 블로그 글의 URL 또는 텍스트를 넣으면 스타일을 분석해 이후 모든 글에 자동 반영합니다.
+
+```
+analyze_style 툴로 내 블로그 스타일 분석해줘:
+- https://blog.naver.com/내아이디/포스팅번호1
+- https://blog.naver.com/내아이디/포스팅번호2
+- https://blog.naver.com/내아이디/포스팅번호3
+```
+
+> URL과 텍스트 직접 붙여넣기를 혼합해서 입력해도 됩니다. 2편 이상 권장.
+
+분석이 완료되면 `save_style_profile` 툴이 자동 호출되어 `style_profile.json`에 저장됩니다.
+이후 `generate_blog` 호출 시 저장된 스타일이 자동으로 반영됩니다.
+스타일을 업데이트하고 싶을 때는 `analyze_style`을 다시 실행하면 덮어씌워집니다.
+
 ### 네이버 블로그 발행
 
 ```
@@ -132,13 +151,15 @@ blog-mcp/
 ├── tools/
 │   ├── image_reader.py       # 이미지 로드 + 리사이즈 (Pillow)
 │   ├── draft_manager.py      # 초안 히스토리 관리
-│   └── naver_publisher.py    # 클립보드 복사 (pyperclip)
+│   ├── naver_publisher.py    # 클립보드 복사 (pyperclip)
+│   └── style_analyzer.py     # 스타일 분석 + URL 크롤링
 ├── templates/
 │   ├── restaurant.py         # 맛집 리뷰 프롬프트
 │   ├── travel.py             # 여행기 프롬프트
 │   └── investment.py         # 투자 정보 프롬프트
-└── drafts/
-    └── history.json          # 초안 히스토리 (자동 생성)
+├── drafts/
+│   └── history.json          # 초안 히스토리 (자동 생성)
+└── style_profile.json        # 개인 스타일 프로필 (analyze_style 후 자동 생성)
 ```
 
 ---
