@@ -14,7 +14,7 @@ Claude Desktop에 연결하면 사진과 간단한 정보만으로 SEO 최적화
 | `list_drafts` | 저장된 초안 목록 조회 |
 | `load_draft` | 초안 ID로 내용 불러오기 |
 | `delete_draft` | 초안 삭제 |
-| `publish_to_naver` | 네이버 블로그에 직접 발행 |
+| `publish_to_naver` | 블로그 글을 클립보드에 복사 (네이버 에디터에 Ctrl+V로 발행) |
 
 **지원 카테고리**: 맛집 리뷰(`restaurant`) · 여행기(`travel`) · 투자 정보(`investment`)
 
@@ -108,35 +108,17 @@ delete_draft 툴로 20260325_153012_restaurant 삭제해줘
 ### 네이버 블로그 발행
 
 ```
-publish_to_naver 툴로 방금 작성한 글 발행해줘
+publish_to_naver 툴로 방금 작성한 글 클립보드에 복사해줘
 - 제목: 홍대 멘야무사시 솔직 후기
 - 내용: (생성된 블로그 본문)
 ```
 
----
+복사 완료 후:
+1. [네이버 블로그 글쓰기](https://blog.naver.com/PostWriteForm.naver) 접속
+2. 제목 입력 후 본문 영역에 `Ctrl+V`
+3. 발행 클릭
 
-## 네이버 블로그 발행 설정
-
-`naver_config.json` 파일에 아래 정보를 입력해야 합니다.
-
-```json
-{
-  "client_id": "네이버 앱 Client ID",
-  "client_secret": "네이버 앱 Client Secret",
-  "access_token": "OAuth 액세스 토큰",
-  "refresh_token": "OAuth 리프레시 토큰",
-  "blog_id": "내 네이버 아이디"
-}
-```
-
-### 발급 방법
-
-1. [네이버 개발자센터](https://developers.naver.com) → 애플리케이션 등록
-2. 사용 API에서 **블로그** 선택 (쓰기 권한 신청 필요)
-3. Client ID / Client Secret 발급
-4. OAuth 2.0 로그인 후 액세스 토큰 발급
-
-> **주의**: `naver_config.json`은 `.gitignore`에 포함되어 있어 GitHub에 업로드되지 않습니다.
+> 네이버 블로그 쓰기 API는 일반 개발자에게 제공되지 않아 클립보드 복사 방식을 사용합니다.
 
 ---
 
@@ -150,7 +132,7 @@ blog-mcp/
 ├── tools/
 │   ├── image_reader.py       # 이미지 로드 + 리사이즈 (Pillow)
 │   ├── draft_manager.py      # 초안 히스토리 관리
-│   └── naver_publisher.py    # 네이버 블로그 API 발행
+│   └── naver_publisher.py    # 클립보드 복사 (pyperclip)
 ├── templates/
 │   ├── restaurant.py         # 맛집 리뷰 프롬프트
 │   ├── travel.py             # 여행기 프롬프트

@@ -11,7 +11,7 @@ from tools.draft_manager import (
     load_draft,
     delete_draft,
 )
-from tools.naver_publisher import publish_to_naver
+from tools.naver_publisher import copy_to_clipboard
 from templates.restaurant import build_restaurant_prompt
 from templates.travel import build_travel_prompt
 from templates.investment import build_investment_prompt
@@ -135,8 +135,8 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="publish_to_naver",
             description=(
-                "작성된 블로그 글을 네이버 블로그에 직접 발행합니다. "
-                "사전에 naver_config.json에 API 인증 정보를 입력해야 합니다."
+                "블로그 제목과 본문을 클립보드에 복사합니다. "
+                "복사 후 네이버 블로그 에디터에서 Ctrl+V로 붙여넣기하면 바로 발행할 수 있습니다."
             ),
             inputSchema={
                 "type": "object",
@@ -147,11 +147,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "content": {
                         "type": "string",
-                        "description": "발행할 블로그 본문 (HTML 가능)",
-                    },
-                    "category_no": {
-                        "type": "integer",
-                        "description": "네이버 블로그 카테고리 번호 (선택, 기본값 0)",
+                        "description": "블로그 본문",
                     },
                 },
                 "required": ["title", "content"],
@@ -274,19 +270,21 @@ def handle_delete_draft(arguments: dict) -> list[types.TextContent]:
 def handle_publish_to_naver(arguments: dict) -> list[types.TextContent]:
     title = arguments["title"]
     content = arguments["content"]
-    category_no = arguments.get("category_no", 0)
 
-    try:
-        result = publish_to_naver(title, content, category_no)
-        if result.get("success"):
-            return [types.TextContent(type="text", text=f"🚀 네이버 블로그 발행 완료!\n{result}")]
-        else:
-            return [types.TextContent(
-                type="text",
-                text=f"❌ 발행 실패: {result.get('error')} (HTTP {result.get('status_code')})"
-            )]
-    except ValueError as e:
-        return [types.TextContent(type="text", text=f"❌ 설정 오류: {e}")]
+    result = copy_to_clipboard(title, content)
+    return [
+        types.TextContent(
+            type="text",
+            text=(
+                f"📋 클립보드에 복사 완료! ({result['char_count']:,}자)\n\n"
+                f"아래 순서로 붙여넣기 하세요:\n"
+                f"1. {result['blog_url']} 접속\n"
+                f"2. 제목 입력란에 제목 붙여넣기\n"
+                f"3. 본문 영역에 내용 붙여넣기\n"
+                f"4. 발행 클릭"
+            ),
+        )
+    ]
 
 
 async def main():
