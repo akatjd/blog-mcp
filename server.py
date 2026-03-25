@@ -12,7 +12,7 @@ from tools.draft_manager import (
     delete_draft,
 )
 from tools.naver_publisher import copy_to_clipboard
-from tools.style_analyzer import build_analysis_prompt, save_style_profile
+from tools.style_analyzer import build_analysis_prompt, save_style_profile, resolve_posts
 from templates.restaurant import build_restaurant_prompt
 from templates.travel import build_travel_prompt
 from templates.investment import build_investment_prompt
@@ -348,8 +348,17 @@ def handle_analyze_style(arguments: dict) -> list[types.TextContent]:
     if not posts:
         return [types.TextContent(type="text", text="❌ 분석할 글이 없습니다.")]
 
-    prompt = build_analysis_prompt(posts)
-    return [types.TextContent(type="text", text=prompt)]
+    resolved, errors = resolve_posts(posts)
+
+    error_text = ""
+    if errors:
+        error_text = "\n⚠️ 가져오지 못한 항목:\n" + "\n".join(f"  - {e}" for e in errors)
+
+    if not resolved:
+        return [types.TextContent(type="text", text=f"❌ 분석 가능한 글이 없습니다.{error_text}")]
+
+    prompt = build_analysis_prompt(resolved)
+    return [types.TextContent(type="text", text=prompt + error_text)]
 
 
 def handle_save_style_profile(arguments: dict) -> list[types.TextContent]:

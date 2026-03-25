@@ -1,9 +1,101 @@
 import json
+import re
+import urllib.request
+import urllib.parse
 from datetime import datetime
+from html.parser import HTMLParser
 from pathlib import Path
 
 PROFILE_PATH = Path(__file__).parent.parent / "style_profile.json"
 
+
+# ── URL 감지 & 네이버 블로그 크롤링 ──────────────────────────────────────────
+
+class _TextExtractor(HTMLParser):
+    """HTML에서 텍스트만 추출하는 간단한 파서"""
+    SKIP_TAGS = {"script", "style", "head", "nav", "footer", "iframe"}
+
+    def __init__(self):
+        super().__init__()
+        self._skip = 0
+        self.texts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP_TAGS:
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP_TAGS and self._skip > 0:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if self._skip == 0:
+            text = data.strip()
+            if text:
+                self.texts.append(text)
+
+
+def _to_mobile_url(url: str) -> str:
+    """네이버 블로그 PC URL → 모바일 URL 변환"""
+    # https://blog.naver.com/blogId/logNo
+    m = re.match(r"https?://blog\.naver\.com/([^/?]+)/(\d+)", url)
+    if m:
+        return f"https://m.blog.naver.com/{m.group(1)}/{m.group(2)}"
+
+    # PostView.naver?blogId=...&logNo=...
+    m = re.search(r"blogId=([^&]+).*logNo=(\d+)", url)
+    if m:
+        return f"https://m.blog.naver.com/{m.group(1)}/{m.group(2)}"
+
+    # 이미 모바일 URL이면 그대로
+    if "m.blog.naver.com" in url:
+        return url
+
+    return url
+
+
+def fetch_blog_content(url: str) -> str:
+    """네이버 블로그 URL에서 본문 텍스트 추출"""
+    mobile_url = _to_mobile_url(url)
+    req = urllib.request.Request(
+        mobile_url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; blog-mcp/1.0)"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        html = resp.read().decode("utf-8", errors="ignore")
+
+    parser = _TextExtractor()
+    parser.feed(html)
+    text = "\n".join(parser.texts)
+
+    # 너무 길면 앞 5000자만 사용
+    return text[:5000]
+
+
+def is_url(text: str) -> bool:
+    return text.strip().startswith("http://") or text.strip().startswith("https://")
+
+
+def resolve_posts(posts: list[str]) -> tuple[list[str], list[str]]:
+    """URL이면 크롤링, 텍스트면 그대로. (resolved, errors) 반환"""
+    resolved = []
+    errors = []
+    for item in posts:
+        if is_url(item):
+            try:
+                content = fetch_blog_content(item.strip())
+                if len(content) < 100:
+                    errors.append(f"{item} (내용을 가져오지 못했습니다)")
+                else:
+                    resolved.append(content)
+            except Exception as e:
+                errors.append(f"{item} (오류: {e})")
+        else:
+            resolved.append(item)
+    return resolved, errors
+
+
+# ── 스타일 분석 프롬프트 ──────────────────────────────────────────────────────
 
 def build_analysis_prompt(posts: list[str]) -> str:
     numbered = "\n\n".join(
@@ -29,6 +121,8 @@ def build_analysis_prompt(posts: list[str]) -> str:
 - dont_list: 절대 쓰지 않는 표현/패턴 (배열)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
+
+# ── 스타일 프로필 저장/로드 ───────────────────────────────────────────────────
 
 def save_style_profile(profile: dict) -> dict:
     profile["updated_at"] = datetime.now().strftime("%Y-%m-%d")
