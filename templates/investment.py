@@ -1,3 +1,6 @@
+from tools.style_analyzer import load_style_profile, build_style_instruction
+
+
 def build_investment_prompt(info: dict) -> str:
     topic = info.get("topic", "")
     ticker = info.get("ticker", "")
@@ -8,6 +11,9 @@ def build_investment_prompt(info: dict) -> str:
 
     ticker_str = f" ({ticker})" if ticker else ""
 
+    profile = load_style_profile()
+    style_section = f"\n{build_style_instruction(profile)}\n" if profile else ""
+
     return f"""[카테고리: 투자 정보]
 
 투자 정보:
@@ -16,7 +22,7 @@ def build_investment_prompt(info: dict) -> str:
 - 현재 가격: {current_price}
 - 투자 분석: {analysis}
 {f"- 추가 메모: {extra}" if extra else ""}
-
+{style_section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 블로그 작성 규칙:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

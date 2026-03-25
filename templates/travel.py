@@ -1,9 +1,15 @@
+from tools.style_analyzer import load_style_profile, build_style_instruction
+
+
 def build_travel_prompt(info: dict) -> str:
     destination = info.get("destination", "")
     travel_date = info.get("travel_date", "")
     duration = info.get("duration", "")
     highlights = info.get("highlights", "")
     extra = info.get("extra", "")
+
+    profile = load_style_profile()
+    style_section = f"\n{build_style_instruction(profile)}\n" if profile else ""
 
     return f"""[카테고리: 여행기]
 
@@ -13,7 +19,7 @@ def build_travel_prompt(info: dict) -> str:
 - 여행 기간: {duration}
 - 주요 방문지/활동: {highlights}
 {f"- 추가 메모: {extra}" if extra else ""}
-
+{style_section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 블로그 작성 규칙:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,3 +1,6 @@
+from tools.style_analyzer import load_style_profile, build_style_instruction
+
+
 def build_restaurant_prompt(info: dict) -> str:
     name = info.get("name", "")
     location = info.get("location", "")
@@ -5,6 +8,9 @@ def build_restaurant_prompt(info: dict) -> str:
     price_range = info.get("price_range", "")
     rating = info.get("rating", "")
     extra = info.get("extra", "")
+
+    profile = load_style_profile()
+    style_section = f"\n{build_style_instruction(profile)}\n" if profile else ""
 
     return f"""[카테고리: 맛집 리뷰]
 
@@ -15,7 +21,7 @@ def build_restaurant_prompt(info: dict) -> str:
 - 가격대: {price_range}
 - 별점: {rating}/5
 {f"- 추가 메모: {extra}" if extra else ""}
-
+{style_section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 블로그 작성 규칙:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

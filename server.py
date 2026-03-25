@@ -12,6 +12,7 @@ from tools.draft_manager import (
     delete_draft,
 )
 from tools.naver_publisher import copy_to_clipboard
+from tools.style_analyzer import build_analysis_prompt, save_style_profile
 from templates.restaurant import build_restaurant_prompt
 from templates.travel import build_travel_prompt
 from templates.investment import build_investment_prompt
@@ -153,6 +154,57 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["title", "content"],
             },
         ),
+        types.Tool(
+            name="analyze_style",
+            description=(
+                "기존 블로그 글 여러 편을 분석해서 작성자의 고유한 글쓰기 스타일 프로필을 추출합니다. "
+                "분석 결과는 이후 generate_blog 호출 시 자동으로 반영됩니다."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "posts": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "분석할 기존 블로그 글 텍스트 목록 (2편 이상 권장)",
+                    },
+                },
+                "required": ["posts"],
+            },
+        ),
+        types.Tool(
+            name="save_style_profile",
+            description="analyze_style 분석 결과를 스타일 프로필로 저장합니다. analyze_style 툴 호출 후 Claude가 자동으로 호출합니다.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tone": {"type": "string", "description": "전반적인 어조와 성격"},
+                    "ending_style": {"type": "string", "description": "문장 종결 방식"},
+                    "avg_sentence_length": {"type": "string", "description": "문장 평균 길이 특징"},
+                    "common_expressions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "자주 쓰는 표현/단어 목록",
+                    },
+                    "paragraph_structure": {"type": "string", "description": "단락 전개 방식"},
+                    "emoji_usage": {"type": "string", "description": "이모지 사용 패턴"},
+                    "hashtag_count": {"type": "string", "description": "해시태그 평균 개수"},
+                    "hashtag_style": {"type": "string", "description": "해시태그 스타일"},
+                    "special_patterns": {"type": "string", "description": "특이점이나 반복 패턴"},
+                    "do_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "반드시 지켜야 할 규칙",
+                    },
+                    "dont_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "절대 쓰지 않는 표현/패턴",
+                    },
+                },
+                "required": ["tone", "ending_style", "do_list", "dont_list"],
+            },
+        ),
     ]
 
 
@@ -170,6 +222,10 @@ async def call_tool(name: str, arguments: dict) -> list:
         return handle_delete_draft(arguments)
     elif name == "publish_to_naver":
         return handle_publish_to_naver(arguments)
+    elif name == "analyze_style":
+        return handle_analyze_style(arguments)
+    elif name == "save_style_profile":
+        return handle_save_style_profile(arguments)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -282,6 +338,38 @@ def handle_publish_to_naver(arguments: dict) -> list[types.TextContent]:
                 f"2. 제목 입력란에 제목 붙여넣기\n"
                 f"3. 본문 영역에 내용 붙여넣기\n"
                 f"4. 발행 클릭"
+            ),
+        )
+    ]
+
+
+def handle_analyze_style(arguments: dict) -> list[types.TextContent]:
+    posts = arguments["posts"]
+    if not posts:
+        return [types.TextContent(type="text", text="❌ 분석할 글이 없습니다.")]
+
+    prompt = build_analysis_prompt(posts)
+    return [types.TextContent(type="text", text=prompt)]
+
+
+def handle_save_style_profile(arguments: dict) -> list[types.TextContent]:
+    profile = save_style_profile(arguments)
+    do_list = "\n".join(f"  ✅ {item}" for item in profile.get("do_list", []))
+    dont_list = "\n".join(f"  ❌ {item}" for item in profile.get("dont_list", []))
+    return [
+        types.TextContent(
+            type="text",
+            text=(
+                f"✨ 스타일 프로필 저장 완료! (업데이트: {profile.get('updated_at')})\n\n"
+                f"어조: {profile.get('tone')}\n"
+                f"종결체: {profile.get('ending_style')}\n"
+                f"문장 길이: {profile.get('avg_sentence_length')}\n"
+                f"단락 구조: {profile.get('paragraph_structure')}\n"
+                f"이모지: {profile.get('emoji_usage')}\n"
+                f"해시태그: {profile.get('hashtag_count')}개 / {profile.get('hashtag_style')}\n\n"
+                f"반드시 할 것:\n{do_list}\n\n"
+                f"절대 하지 말 것:\n{dont_list}\n\n"
+                f"이제 generate_blog 호출 시 이 스타일이 자동으로 반영됩니다."
             ),
         )
     ]
