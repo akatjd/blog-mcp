@@ -1,0 +1,5 @@
+naver_config.json
+__pycache__/
+*.pyc
+drafts/
+.env
