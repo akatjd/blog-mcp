@@ -57,7 +57,7 @@ async def list_tools() -> list[types.Tool]:
                         "type": "object",
                         "description": (
                             "카테고리별 추가 정보:\n"
-                            "- restaurant: {name, location, menu, price_range, rating, extra}\n"
+                            "- restaurant: {name, location(국내: '역이름' 또는 '동네/인근동네', 해외: '나라/도시'), menu, price_range, rating, extra}\n"
                             "- travel: {destination, travel_date, duration, highlights, extra}\n"
                             "- investment: {topic, ticker, purchase_price, current_price, analysis, extra}"
                         ),
