@@ -143,20 +143,25 @@ def load_style_profile() -> dict | None:
 
 def build_style_instruction(profile: dict) -> str:
     """저장된 스타일 프로필을 템플릿에 주입할 지침 문자열로 변환"""
-    do_list = "\n".join(f"   - {item}" for item in profile.get("do_list", []))
-    dont_list = "\n".join(f"   - {item}" for item in profile.get("dont_list", []))
+    do_list = "\n".join(f"   ✅ {item}" for item in profile.get("do_list", []))
+    dont_list = "\n".join(f"   ❌ {item}" for item in profile.get("dont_list", []))
     common_expr = ", ".join(f'"{e}"' for e in profile.get("common_expressions", []))
 
     return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[작성자 개인 스타일 프로필 - 반드시 준수]
+[⚠️ 작성자 개인 스타일 프로필 - 아래 규칙을 최우선으로 준수할 것]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 어조: {profile.get("tone", "")}
-문장 종결: {profile.get("ending_style", "")}
+
+【종결체 규칙 - 절대 원칙】
+{profile.get("ending_style", "")}
+→ 예시 O: "맛있었다", "주문했다", "나왔다", "좋았다"
+→ 예시 X: "맛있어요", "주문했어요", "나왔답니다", "좋았네요"
+
 문장 길이: {profile.get("avg_sentence_length", "")}
 자주 쓰는 표현: {common_expr}
 단락 구조: {profile.get("paragraph_structure", "")}
-이모지: {profile.get("emoji_usage", "")}
+이모지 규칙: {profile.get("emoji_usage", "")}
 해시태그: {profile.get("hashtag_count", "")}개, {profile.get("hashtag_style", "")}
 특이 패턴: {profile.get("special_patterns", "")}
 
@@ -166,4 +171,5 @@ def build_style_instruction(profile: dict) -> str:
 절대 하지 말 것:
 {dont_list}
 
-(프로필 최종 업데이트: {profile.get("updated_at", "")})"""
+(프로필 최종 업데이트: {profile.get("updated_at", "")})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
