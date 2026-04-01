@@ -12,7 +12,7 @@ from tools.draft_manager import (
     delete_draft,
 )
 from tools.naver_publisher import copy_to_clipboard
-from tools.style_analyzer import build_analysis_prompt, save_style_profile, resolve_posts
+from tools.style_analyzer import build_analysis_prompt, save_style_profile, resolve_posts, load_style_profile
 from templates.restaurant import build_restaurant_prompt
 from templates.travel import build_travel_prompt
 from templates.investment import build_investment_prompt
@@ -173,6 +173,56 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="revise_blog",
+            description=(
+                "작성된 블로그 글을 수정 지시사항에 따라 재작성합니다. "
+                "도입부 다시 쓰기, 분량 늘리기, 특정 단락 수정 등 자유롭게 지시할 수 있습니다."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "현재 블로그 글 내용",
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "description": (
+                            "수정 지시사항 (예: '도입부를 좀 더 자연스럽게', "
+                            "'분량을 500자 더 늘려줘', '마무리 부분을 다시 써줘')"
+                        ),
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "블로그 카테고리 (선택)",
+                    },
+                },
+                "required": ["content", "instruction"],
+            },
+        ),
+        types.Tool(
+            name="suggest_titles",
+            description=(
+                "블로그 정보를 기반으로 SEO 최적화된 제목 후보 3개를 제안합니다. "
+                "마음에 드는 제목을 선택해서 사용하세요."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": ["restaurant", "travel", "investment"],
+                        "description": "블로그 카테고리",
+                    },
+                    "info": {
+                        "type": "object",
+                        "description": "카테고리별 정보 (generate_blog와 동일한 info 형식)",
+                    },
+                },
+                "required": ["category", "info"],
+            },
+        ),
+        types.Tool(
             name="save_style_profile",
             description="analyze_style 분석 결과를 스타일 프로필로 저장합니다. analyze_style 툴 호출 후 Claude가 자동으로 호출합니다.",
             inputSchema={
@@ -222,6 +272,10 @@ async def call_tool(name: str, arguments: dict) -> list:
         return handle_delete_draft(arguments)
     elif name == "publish_to_naver":
         return handle_publish_to_naver(arguments)
+    elif name == "revise_blog":
+        return handle_revise_blog(arguments)
+    elif name == "suggest_titles":
+        return handle_suggest_titles(arguments)
     elif name == "analyze_style":
         return handle_analyze_style(arguments)
     elif name == "save_style_profile":
@@ -341,6 +395,102 @@ def handle_publish_to_naver(arguments: dict) -> list[types.TextContent]:
             ),
         )
     ]
+
+
+def handle_revise_blog(arguments: dict) -> list[types.TextContent]:
+    content = arguments["content"]
+    instruction = arguments["instruction"]
+    category = arguments.get("category", "")
+
+    profile = load_style_profile()
+    style_note = ""
+    if profile:
+        style_note = (
+            f"\n\n[스타일 규칙 준수]\n"
+            f"- 종결체: {profile.get('ending_style', '')}\n"
+            f"- 이모지: {profile.get('emoji_usage', '')}\n"
+            f"- 마크다운 절대 금지 (##헤더, **굵은글씨**, 불릿 등)"
+        )
+
+    prompt = f"""아래 블로그 글을 수정 지시사항에 따라 재작성해주세요.
+
+[수정 지시사항]
+{instruction}
+
+[현재 블로그 글]
+{content}
+
+[재작성 규칙]
+- 수정 지시한 부분만 변경하고 나머지는 최대한 유지
+- 마크다운 문법 절대 사용 금지 (네이버 블로그 미지원)
+- 일반 텍스트와 줄바꿈만 사용
+- 1500자 이상 유지{style_note}
+
+수정된 전체 글을 출력해주세요."""
+
+    return [types.TextContent(type="text", text=prompt)]
+
+
+def handle_suggest_titles(arguments: dict) -> list[types.TextContent]:
+    category = arguments["category"]
+    info = arguments["info"]
+
+    if category == "restaurant":
+        name = info.get("name", "")
+        location = info.get("location", "")
+        menu = info.get("menu", "")
+        prompt = f"""맛집 블로그 제목 후보 3개를 제안해주세요.
+
+정보:
+- 식당명: {name}
+- 위치: {location}
+- 메뉴: {menu}
+
+제목 형식 (반드시 준수):
+- 국내: [{location}] {name} - 메뉴명
+- 해외: [나라/도시] {name} - 메뉴명
+- 예시: [왕십리/상왕십리] 아라참치 - 스페셜
+- 예시: [일본/나고야] 야바톤 센트라이즈점 - 미소카츠
+
+3개의 제목을 번호로 나열해주세요. 각 제목마다 한 줄 설명(어떤 포인트를 강조했는지)도 추가해주세요."""
+
+    elif category == "travel":
+        destination = info.get("destination", "")
+        duration = info.get("duration", "")
+        travel_date = info.get("travel_date", "")
+        highlights = info.get("highlights", "")
+        prompt = f"""여행 블로그 제목 후보 3개를 제안해주세요.
+
+정보:
+- 여행지: {destination}
+- 기간: {duration}
+- 날짜: {travel_date}
+- 주요 방문지: {highlights}
+
+조건:
+- 실제 검색어 기반 (예: "{destination} 여행", "{destination} 맛집")
+- 여행지 + 기간 + 핵심 키워드 포함
+- 느낌표, 마침표 없이 담백하게
+
+3개의 제목을 번호로 나열하고 각 제목의 SEO 포인트를 한 줄로 설명해주세요."""
+
+    else:  # investment
+        topic = info.get("topic", "")
+        ticker = info.get("ticker", "")
+        ticker_str = f" ({ticker})" if ticker else ""
+        prompt = f"""투자 블로그 제목 후보 3개를 제안해주세요.
+
+정보:
+- 종목/자산: {topic}{ticker_str}
+
+조건:
+- 실제 검색어 기반 (예: "{topic} 주가", "{topic} 매수")
+- 종목명 + 투자 액션 + 키워드 포함
+- 과장 없이 분석적인 톤
+
+3개의 제목을 번호로 나열하고 각 제목의 SEO 포인트를 한 줄로 설명해주세요."""
+
+    return [types.TextContent(type="text", text=prompt)]
 
 
 def handle_analyze_style(arguments: dict) -> list[types.TextContent]:
