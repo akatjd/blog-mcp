@@ -13,17 +13,31 @@ from tools.draft_manager import (
 )
 from tools.naver_publisher import copy_to_clipboard
 from tools.style_analyzer import build_analysis_prompt, save_style_profile, resolve_posts, load_style_profile
-from templates.restaurant import build_restaurant_prompt
-from templates.travel import build_travel_prompt
-from templates.investment import build_investment_prompt
+from tools import template_loader, info_validator
 
 app = Server("blog-mcp")
 
-CATEGORY_PROMPTS = {
-    "restaurant": build_restaurant_prompt,
-    "travel": build_travel_prompt,
-    "investment": build_investment_prompt,
-}
+CATEGORIES = template_loader.get_categories()
+
+
+def _build_category_description() -> str:
+    parts = []
+    for name in CATEGORIES:
+        tpl = template_loader.get_template(name)
+        parts.append(f"{name}({tpl.get('display_name', name)})")
+    return "블로그 카테고리: " + ", ".join(parts)
+
+
+def _build_info_description() -> str:
+    lines = ["카테고리별 추가 정보:"]
+    for name in CATEGORIES:
+        fields = template_loader.get_fields(name)
+        field_strs = []
+        for f in fields:
+            mark = "" if f.get("required") else "?"
+            field_strs.append(f"{f['name']}{mark}")
+        lines.append(f"- {name}: {{{', '.join(field_strs)}}}")
+    return "\n".join(lines)
 
 
 @app.list_tools()
@@ -50,17 +64,12 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "category": {
                         "type": "string",
-                        "enum": ["restaurant", "travel", "investment"],
-                        "description": "블로그 카테고리: restaurant(맛집 리뷰), travel(여행기), investment(투자 정보)",
+                        "enum": CATEGORIES,
+                        "description": _build_category_description(),
                     },
                     "info": {
                         "type": "object",
-                        "description": (
-                            "카테고리별 추가 정보:\n"
-                            "- restaurant: {name, location(국내: '역이름' 또는 '동네/인근동네', 해외: '나라/도시'), menu, price_range, rating, extra}\n"
-                            "- travel: {destination, travel_date, duration, highlights, extra}\n"
-                            "- investment: {topic, ticker, purchase_price, current_price, analysis, extra}"
-                        ),
+                        "description": _build_info_description(),
                     },
                     "save_path": {
                         "type": "string",
@@ -211,7 +220,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["restaurant", "travel", "investment"],
+                        "enum": CATEGORIES,
                         "description": "블로그 카테고리",
                     },
                     "info": {
@@ -290,10 +299,16 @@ async def handle_generate_blog(arguments: dict) -> list:
     info = arguments["info"]
     save_path = arguments.get("save_path", "")
 
+    validated, err = info_validator.validate(category, info)
+    if err:
+        return [types.TextContent(type="text", text=err)]
+
     images, errors = load_images_as_content(image_paths)
 
-    prompt_builder = CATEGORY_PROMPTS.get(category, build_restaurant_prompt)
-    prompt = prompt_builder(info)
+    try:
+        prompt = template_loader.build_prompt(category, validated)
+    except ValueError as e:
+        return [types.TextContent(type="text", text=f"❌ {e}")]
 
     error_text = ""
     if errors:
@@ -434,6 +449,11 @@ def handle_revise_blog(arguments: dict) -> list[types.TextContent]:
 def handle_suggest_titles(arguments: dict) -> list[types.TextContent]:
     category = arguments["category"]
     info = arguments["info"]
+
+    validated, err = info_validator.validate(category, info)
+    if err:
+        return [types.TextContent(type="text", text=err)]
+    info = validated
 
     if category == "restaurant":
         name = info.get("name", "")

@@ -1,3 +1,6 @@
 mcp[cli]>=1.0.0
 Pillow>=10.0.0
 pyperclip>=1.8.0
+PyYAML>=6.0
+pydantic>=2.0
+beautifulsoup4>=4.12

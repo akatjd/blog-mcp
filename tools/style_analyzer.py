@@ -1,61 +1,77 @@
 import json
 import re
 import urllib.request
-import urllib.parse
 from datetime import datetime
-from html.parser import HTMLParser
 from pathlib import Path
+
+from bs4 import BeautifulSoup
 
 PROFILE_PATH = Path(__file__).parent.parent / "style_profile.json"
 
 
 # ── URL 감지 & 네이버 블로그 크롤링 ──────────────────────────────────────────
 
-class _TextExtractor(HTMLParser):
-    """HTML에서 텍스트만 추출하는 간단한 파서"""
-    SKIP_TAGS = {"script", "style", "head", "nav", "footer", "iframe"}
+# 네이버 스마트에디터 본문 컨테이너 선택자 (우선순위 순)
+_BODY_SELECTORS = [
+    ".se-main-container",      # SmartEditor 3 (현재 표준)
+    "#postViewArea",           # 구 에디터 (legacy)
+    ".post_ct",                # 모바일 일부 케이스
+]
 
-    def __init__(self):
-        super().__init__()
-        self._skip = 0
-        self.texts = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self.SKIP_TAGS:
-            self._skip += 1
-
-    def handle_endtag(self, tag):
-        if tag in self.SKIP_TAGS and self._skip > 0:
-            self._skip -= 1
-
-    def handle_data(self, data):
-        if self._skip == 0:
-            text = data.strip()
-            if text:
-                self.texts.append(text)
+# 본문 안에서 수집할 SE3 의미 단위 (모두 수집)
+_SE3_BLOCK_SELECTORS = [
+    ".se-text-paragraph",      # 일반 단락
+    ".se-quotation-container", # 인용
+    ".se-caption",             # 이미지 캡션
+]
+# SE3 블록이 하나도 안 잡힐 때만 사용
+_FALLBACK_SELECTOR = "p"
 
 
 def _to_mobile_url(url: str) -> str:
-    """네이버 블로그 PC URL → 모바일 URL 변환"""
-    # https://blog.naver.com/blogId/logNo
+    """네이버 블로그 PC URL → 모바일 URL 변환 (모바일이 본문 구조가 더 단순)"""
     m = re.match(r"https?://blog\.naver\.com/([^/?]+)/(\d+)", url)
     if m:
         return f"https://m.blog.naver.com/{m.group(1)}/{m.group(2)}"
 
-    # PostView.naver?blogId=...&logNo=...
     m = re.search(r"blogId=([^&]+).*logNo=(\d+)", url)
     if m:
         return f"https://m.blog.naver.com/{m.group(1)}/{m.group(2)}"
 
-    # 이미 모바일 URL이면 그대로
-    if "m.blog.naver.com" in url:
-        return url
-
     return url
 
 
+def _extract_body_text(html: str) -> str:
+    """네이버 블로그 HTML에서 본문 컨테이너만 추출."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    body = None
+    for selector in _BODY_SELECTORS:
+        body = soup.select_one(selector)
+        if body:
+            break
+    if not body:
+        return ""
+
+    elements = body.select(", ".join(_SE3_BLOCK_SELECTORS))
+    if not elements:
+        elements = body.select(_FALLBACK_SELECTOR)
+
+    paragraphs: list[str] = []
+    seen_ids: set[int] = set()
+    for el in elements:
+        if id(el) in seen_ids:
+            continue
+        seen_ids.add(id(el))
+        text = el.get_text(separator=" ", strip=True)
+        if text:
+            paragraphs.append(text)
+
+    return "\n\n".join(paragraphs)
+
+
 def fetch_blog_content(url: str) -> str:
-    """네이버 블로그 URL에서 본문 텍스트 추출"""
+    """네이버 블로그 URL에서 본문 텍스트만 추출."""
     mobile_url = _to_mobile_url(url)
     req = urllib.request.Request(
         mobile_url,
@@ -64,11 +80,10 @@ def fetch_blog_content(url: str) -> str:
     with urllib.request.urlopen(req, timeout=10) as resp:
         html = resp.read().decode("utf-8", errors="ignore")
 
-    parser = _TextExtractor()
-    parser.feed(html)
-    text = "\n".join(parser.texts)
+    text = _extract_body_text(html)
+    if not text:
+        raise ValueError("본문 컨테이너(.se-main-container 등)를 찾지 못했습니다")
 
-    # 너무 길면 앞 5000자만 사용
     return text[:5000]
 
 
