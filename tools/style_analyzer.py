@@ -27,6 +27,17 @@ _SE3_BLOCK_SELECTORS = [
 # SE3 블록이 하나도 안 잡힐 때만 사용
 _FALLBACK_SELECTOR = "p"
 
+# 네이버 에디터 기본 플레이스홀더 — 실제 작성자의 글이 아니므로 필터링
+_EDITOR_PLACEHOLDERS = {
+    "AI 활용 설정",
+    "사진 설명을 입력하세요.",
+    "사진 설명을 입력하세요",
+    "동영상 설명을 입력하세요.",
+    "동영상 설명을 입력하세요",
+    "장소 설명을 입력하세요.",
+    "장소 설명을 입력하세요",
+}
+
 
 def _to_mobile_url(url: str) -> str:
     """네이버 블로그 PC URL → 모바일 URL 변환 (모바일이 본문 구조가 더 단순)"""
@@ -64,8 +75,9 @@ def _extract_body_text(html: str) -> str:
             continue
         seen_ids.add(id(el))
         text = el.get_text(separator=" ", strip=True)
-        if text:
-            paragraphs.append(text)
+        if not text or text in _EDITOR_PLACEHOLDERS:
+            continue
+        paragraphs.append(text)
 
     return "\n\n".join(paragraphs)
 
